@@ -17,6 +17,7 @@ import time
 from datetime import datetime
 
 from .config import Settings, ensure_dirs, load_profile, load_sources, SourceConfig
+from .deadlines import is_expired
 from .db import Database
 from .enrich import Enricher
 from .extractors.css import CssExtractor
@@ -141,11 +142,18 @@ def main() -> int:
 
     summary.new_calls = len(new_calls)
     summary.all_new_calls = new_calls
+    active_new = [c for c in new_calls if not is_expired(c.deadline)]
+    expired_new = [c for c in new_calls if is_expired(c.deadline)]
     summary.top_calls = sorted(
-        new_calls,
+        active_new,
         key=lambda c: (c.profile_match_score or 0),
         reverse=True,
     )[:5]
+    if expired_new:
+        log.info(
+            "Nowe nabory: %d aktywnych, %d juz po terminie (trafia do zakladki 'Po terminie')",
+            len(active_new), len(expired_new),
+        )
 
     sheet_url: str | None = None
     if not settings.dry_run and settings.has_sheets:

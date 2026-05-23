@@ -22,6 +22,7 @@ from google.oauth2.service_account import Credentials
 
 from ..config import Settings
 from ..db import Database
+from ..deadlines import split_rows_by_deadline
 from ..logging_setup import setup_logging
 from ..models import CallRecord
 
@@ -33,6 +34,7 @@ SCOPES = [
 ]
 
 SHEET_DRAFTS = "Nowe nieprzejrzane"
+SHEET_EXPIRED = "Po terminie"
 SHEET_PUBLISHED = "Wszystkie opublikowane"
 
 DRAFT_HEADERS = [
@@ -69,9 +71,10 @@ def _ensure_worksheet(sheet, title: str, headers: list[str]):
     existing = ws.row_values(1)
     if existing != headers:
         ws.update(values=[headers], range_name=f"A1:{_col_letter(len(headers))}1")
+        bg = {"red": 0.55, "green": 0.15, "blue": 0.15} if title == SHEET_EXPIRED else {"red": 0.04, "green": 0.30, "blue": 0.55}
         ws.format(f"A1:{_col_letter(len(headers))}1", {
             "textFormat": {"bold": True},
-            "backgroundColor": {"red": 0.04, "green": 0.30, "blue": 0.55},
+            "backgroundColor": bg,
             "horizontalAlignment": "CENTER",
         })
         ws.format(f"A1:{_col_letter(len(headers))}1", {
@@ -93,7 +96,7 @@ def _col_letter(n: int) -> str:
 # ---------------------------------------------------------------------------
 
 def push_drafts(settings: Settings, db: Database, calls: list[CallRecord] | None = None) -> str | None:
-    """Zapisz draft-y do arkusza. Zwroc URL arkusza jesli sukces."""
+    """Zapisz draft-y do arkusza. Aktywne -> 'Nowe nieprzejrzane', po terminie -> 'Po terminie'."""
     if not settings.has_sheets:
         logger.warning("Pominieto push do Sheets - brak konfiguracji")
         return None
@@ -103,9 +106,39 @@ def push_drafts(settings: Settings, db: Database, calls: list[CallRecord] | None
     else:
         rows_data = [_call_to_row_dict(c) for c in calls]
 
-    sheet = _open_sheet(settings)
-    ws = _ensure_worksheet(sheet, SHEET_DRAFTS, DRAFT_HEADERS)
+    active_rows, expired_rows = split_rows_by_deadline(rows_data)
+    expired_ids = {str(r.get("id") or "") for r in expired_rows if r.get("id")}
 
+    sheet = _open_sheet(settings)
+    ws_active = _ensure_worksheet(sheet, SHEET_DRAFTS, DRAFT_HEADERS)
+    ws_expired = _ensure_worksheet(sheet, SHEET_EXPIRED, DRAFT_HEADERS)
+
+    added_active = _push_rows_to_worksheet(ws_active, active_rows, preserve_decisions=True)
+    added_expired = _push_rows_to_worksheet(ws_expired, expired_rows, preserve_decisions=False)
+    removed = _purge_ids_from_worksheet(ws_active, expired_ids)
+
+    for ws in (ws_active, ws_expired):
+        try:
+            ws.set_basic_filter(name=f"A1:{_col_letter(len(DRAFT_HEADERS))}1")
+        except Exception:
+            pass
+
+    sheet_url = f"https://docs.google.com/spreadsheets/d/{settings.google_sheet_id}/edit"
+    logger.info(
+        "Sheets push: %d aktywnych (+%d), %d po terminie (+%d), usunieto %d z '%s' (URL: %s)",
+        len(active_rows), added_active, len(expired_rows), added_expired, removed,
+        SHEET_DRAFTS, sheet_url,
+    )
+    return sheet_url
+
+
+def _push_rows_to_worksheet(
+    ws,
+    rows_data: list[dict[str, Any]],
+    *,
+    preserve_decisions: bool,
+) -> int:
+    """Dopisz/aktualizuj wiersze w zakladce. Zwroc liczbe nowo dopisanych."""
     existing_rows = ws.get_all_values()[1:] if ws.row_count > 1 else []
     existing_by_id: dict[str, dict[str, Any]] = {
         row[0]: {"row_idx": idx + 2, "decision": row[2] if len(row) > 2 else ""}
@@ -123,7 +156,8 @@ def push_drafts(settings: Settings, db: Database, calls: list[CallRecord] | None
 
         row = _build_draft_row(r)
         if cid in existing_by_id:
-            row[2] = existing_by_id[cid]["decision"] or ""
+            if preserve_decisions:
+                row[2] = existing_by_id[cid]["decision"] or ""
             ws.update(
                 range_name=f"A{existing_by_id[cid]['row_idx']}:{_col_letter(len(DRAFT_HEADERS))}{existing_by_id[cid]['row_idx']}",
                 values=[row],
@@ -134,15 +168,24 @@ def push_drafts(settings: Settings, db: Database, calls: list[CallRecord] | None
     if new_rows:
         ws.append_rows(new_rows, value_input_option="USER_ENTERED")
 
-    try:
-        ws.set_basic_filter(name=f"A1:{_col_letter(len(DRAFT_HEADERS))}1")
-    except Exception:
-        pass
+    return len(new_rows)
 
-    sheet_url = f"https://docs.google.com/spreadsheets/d/{settings.google_sheet_id}/edit"
-    logger.info("Sheets push: dopisano %d nowych do '%s' (URL: %s)",
-                len(new_rows), SHEET_DRAFTS, sheet_url)
-    return sheet_url
+
+def _purge_ids_from_worksheet(ws, ids: set[str]) -> int:
+    """Usun wiersze po ID (np. gdy nabor wygasl i trafil do 'Po terminie')."""
+    if not ids:
+        return 0
+    rows = ws.get_all_values()
+    to_delete = [
+        idx for idx, row in enumerate(rows[1:], start=2)
+        if row and row[0] in ids
+    ]
+    for idx in reversed(to_delete):
+        try:
+            ws.delete_rows(idx)
+        except Exception:
+            logger.exception("Nie udalo sie usunac wiersza %d z %s", idx, ws.title)
+    return len(to_delete)
 
 
 def push_published(settings: Settings, db: Database) -> None:

@@ -10,6 +10,7 @@ import resend
 from jinja2 import Environment, select_autoescape
 
 from ..config import Settings
+from ..deadlines import is_expired
 from ..models import RunSummary
 
 logger = logging.getLogger(__name__)
@@ -71,8 +72,16 @@ _HTML_TEMPLATE = """<!doctype html>
 
     {% if other_count > 0 %}
     <p style="font-size: 14px; color: #555; margin: 16px 0;">
-      ...oraz <strong>{{ other_count }}</strong> innych naborow w arkuszu (sortowanie po dopasowaniu).
+      ...oraz <strong>{{ other_count }}</strong> innych aktywnych naborow w arkuszu (sortowanie po dopasowaniu).
     </p>
+    {% endif %}
+
+    {% if expired_count > 0 %}
+    <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 12px 16px; border-radius: 4px; margin: 16px 0; font-size: 14px; color: #555;">
+      <strong style="color: #b91c1c;">{{ expired_count }}</strong>
+      {{ 'nabor ma juz miniony termin' if expired_count == 1 else 'nabory maja juz miniony termin' }}
+      &mdash; znajdziesz je w zakladce <strong>„Po terminie”</strong> w arkuszu (informacyjnie, nie wymagaja decyzji).
+    </div>
     {% endif %}
 
     {% if sheet_url %}
@@ -117,7 +126,10 @@ Zrodla OK: {{ summary.sources_ok }}/{{ summary.sources_total }}
 
 {% endfor %}
 
-{% if other_count > 0 %}...oraz {{ other_count }} innych w arkuszu.{% endif %}
+{% if other_count > 0 %}...oraz {{ other_count }} innych aktywnych w arkuszu.{% endif %}
+{% if expired_count > 0 %}
+{{ expired_count }} nabor(ow) po terminie -> zakladka "Po terminie" w arkuszu.
+{% endif %}
 
 {% if sheet_url %}Panel: {{ sheet_url }}{% endif %}
 
@@ -187,13 +199,16 @@ def send_summary_mail(
     html_tpl = env.from_string(_HTML_TEMPLATE)
     text_tpl = env.from_string(_TEXT_TEMPLATE)
 
-    top_calls = summary.top_calls
-    other_count = max(0, summary.new_calls - len(top_calls))
+    top_calls = [c for c in summary.top_calls if not is_expired(c.deadline)]
+    active_total = len([c for c in summary.all_new_calls if not is_expired(c.deadline)])
+    expired_count = len([c for c in summary.all_new_calls if is_expired(c.deadline)])
+    other_count = max(0, active_total - len(top_calls))
 
     ctx: dict[str, Any] = {
         "summary": summary,
         "top_calls": top_calls,
         "other_count": other_count,
+        "expired_count": expired_count,
         "failed": summary.failed_sources,
         "sheet_url": sheet_url,
         "date_str": datetime.now().strftime("%Y-%m-%d"),
