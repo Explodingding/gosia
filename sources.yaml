@@ -50,20 +50,24 @@ sources:
   # --- Etap 2: dodatkowe zrodla (uzupelniane stopniowo) ------------------
 
   - name: "NCBR - Konkursy"
-    url: "https://www.gov.pl/web/ncbr/konkursy"
+    url: "https://www.gov.pl/web/ncbr/harmonogram-konkursow-2026"
     fetcher: playwright
     extractor: llm
-    wait_for_selector: "main, article, .konkurs"
+    wait_for_selector: "main, article, h3"
     active: true
-    notes: B+R, innowacje. Strona gov.pl - ciezka, wymaga Playwrighta.
+    notes: |
+      Harmonogram konkursow NCBR (stary URL /konkursy przekierowuje na homepage).
+      B+R, innowacje, FENG, programy strategiczne.
 
   - name: "Fundusze Europejskie dla Pomorza 2021-2027"
-    url: "https://www.fundusze.pomorskie.eu/skorzystaj-z-programu/zobacz-ogloszenia-i-wyniki-naborow-wnioskow"
+    url: "https://www.funduszeuepomorskie.pl/nabory"
     fetcher: playwright
     extractor: llm
-    wait_for_selector: "main, .nabor, .ogloszenie"
+    wait_for_selector: "main, h2, .nabory, article"
     active: true
-    notes: Regionalny program FE Pomorze - top dla lokalnej klienteli.
+    notes: |
+      Regionalny program FE Pomorze. Stara domena fundusze.pomorskie.eu ma zly cert SSL
+      i zwraca 404 - aktualny serwis to funduszeuepomorskie.pl.
 
   - name: "Krajowy Plan Odbudowy (gov.pl)"
     url: "https://www.gov.pl/web/planodbudowy/aktualne-nabory-i-konkursy"
