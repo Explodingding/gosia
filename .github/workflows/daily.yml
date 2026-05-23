@@ -47,6 +47,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install -e .
 
       - name: Install Playwright Chromium
         run: |
@@ -104,6 +105,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
+          pip install -e .
 
       - name: Apply Sheet -> Supabase decisions
         env:
