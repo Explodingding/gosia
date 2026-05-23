@@ -99,7 +99,8 @@ Deno.serve(async (req) => {
   }
 
   // Wyslij mail z potwierdzeniem (double opt-in)
-  const confirmUrl = `${Deno.env.get("PUBLIC_BASE_URL") || "https://inwestycjepomorze.pl"}/newsletter-confirm?token=${data.unsubscribe_token}&email=${encodeURIComponent(email)}`;
+  const supaUrl = Deno.env.get("SUPABASE_URL")!;
+  const confirmUrl = `${supaUrl}/functions/v1/confirm?token=${data.unsubscribe_token}&email=${encodeURIComponent(email)}`;
 
   await sendConfirmEmail({
     to: email,
