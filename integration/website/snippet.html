@@ -1,0 +1,54 @@
+<!--
+  Snippet do wstawienia w <head> strony inwestycjepomorze.pl
+  ============================================================
+  Zastap wartosci `content` rzeczywistym Project URL i anon key z Supabase
+  (Project Settings -> API). UWAGA: anon key jest BEZPIECZNY do umieszczenia
+  w HTML - chroni go RLS na bazie (anon widzi tylko status='published').
+  NIGDY nie wkladaj tu service_role key.
+-->
+<meta name="supabase-url" content="https://xxxxxxxxxxxxxxxx.supabase.co">
+<meta name="supabase-anon-key" content="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+
+
+<!--
+  Snippet do wstawienia tuz przed </body> strony inwestycjepomorze.pl
+  ============================================================
+  Mozesz tez go wgrac jako lokalny plik /js/nabory-widget.js
+  (rekomendowane, mniej zaleznosci od CDN).
+-->
+<script src="/js/nabory-widget.js" defer></script>
+
+
+<!--
+  Opcjonalne: jesli sekcja #fundusze nie ma jeszcze wewnetrznej struktury
+  (lista naborow, programy, status), oto rekomendowany szkielet.
+  Wkleic do <section id="fundusze"> ... </section>.
+-->
+<div class="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
+
+  <div class="text-center mb-8">
+    <h2 class="text-3xl md:text-4xl font-bold mb-3">Fundusze Unijne 2021-2027</h2>
+    <p class="text-gray-600">Aktualnie monitorujemy <span id="fundusze-count" class="font-semibold">...</span>
+       naborow. Ostatnia aktualizacja: <span id="fundusze-updated" class="font-semibold">...</span>.</p>
+  </div>
+
+  <div class="flex flex-wrap items-center justify-center gap-3 mb-6">
+    <span class="text-sm text-gray-700 font-medium">Status:</span>
+    <div id="fundusze-status" class="flex flex-wrap gap-2"></div>
+  </div>
+
+  <div class="flex flex-wrap items-center justify-center gap-2 mb-8">
+    <span class="text-sm text-gray-700 font-medium mr-2">Program:</span>
+    <div id="fundusze-programs-list" class="flex flex-wrap gap-2"></div>
+  </div>
+
+  <div id="fundusze-calls" class="max-w-5xl mx-auto">
+    <div id="fundusze-calls-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="text-center py-12 text-gray-500 col-span-full">
+        <i class="fas fa-spinner fa-spin text-3xl mb-2"></i>
+        <p>Ladowanie naborow...</p>
+      </div>
+    </div>
+  </div>
+
+</div>

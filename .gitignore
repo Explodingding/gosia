@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Environment variables (NIGDY nie commituj!)
+.env
+.env.local
+.env.*.local
+*.env
+
+# Sekrety
+service-account.json
+google-credentials.json
+*-credentials.json
+*.pem
+*.key
+
+# Lokalne artefakty
+artifacts/
+screenshots/
+debug/
+*.log
+logs/
+
+# Playwright
+playwright-report/
+test-results/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Lokalny cache
+.cache/
+.tmp/
+tmp/

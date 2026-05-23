@@ -1,0 +1,106 @@
+# =============================================================================
+# Lista zrodel monitorowanych przez agenta
+# =============================================================================
+# Format kazdego zrodla:
+#   - name:           czytelna nazwa (do logow i mailu)
+#     url:            startowy URL listy naborow
+#     fetcher:        http | playwright | rss | pdf
+#     extractor:      css | llm   (css = uzywa selektorow ponizej, llm = LLM wyciaga z tekstu)
+#     list_selector:  selektor CSS dla pojedynczego elementu listy (jesli extractor=css)
+#     fields:         mapowanie pol -> selektory CSS (uzywa "@attr" zeby pobrac atrybut)
+#     active:         true/false - czy zrodlo jest wlaczone w codziennym runie
+#     notes:          komentarz dla osoby utrzymujacej
+#
+# Strategia awaryjna: jesli extractor=css zwroci 0 elementow, system AUTOMATYCZNIE
+# probuje extractor=llm (przekazuje pelny tekst strony do LLM zeby wyciagnal liste).
+# Jesli to tez zawiedzie, zrodlo trafia do sekcji "Zrodla z bledem" w mailu.
+# =============================================================================
+
+sources:
+
+  # --- Etap 1: pierwsze zrodla (obowiazkowe na MVP) -----------------------
+
+  - name: "Fundusze Europejskie - Nabory (gov.pl)"
+    url: "https://www.funduszeunijne.gov.pl/strony/skorzystaj/nabory/"
+    fetcher: playwright
+    extractor: css
+    # Strona to SPA z fragmentem #/domyslne=1. Czekamy na zaladowanie listy.
+    wait_for_selector: ".o-list-item, [class*='nabor'], .list__item"
+    list_selector: ".o-list-item, [class*='nabor-item'], .list__item"
+    fields:
+      title: "h3, .title, a"
+      link: "a@href"
+      deadline: ".date, .deadline, time"
+      program: ".program, .badge"
+    active: true
+    notes: |
+      Glowne zrodlo. SPA wymaga Playwrighta i prawdziwego User-Agenta.
+      Selektory CSS sa zachowawcze (kilka alternatyw) - jesli zawioda, fallback do LLM-extract.
+
+  - name: "PARP - Nabory dla MSP"
+    url: "https://www.parp.gov.pl/component/grants/grants"
+    fetcher: playwright
+    extractor: llm
+    wait_for_selector: "main, .grants, .nabor"
+    active: true
+    notes: |
+      PARP czesto zmienia layout - od razu uzywamy LLM-extract.
+      Kluczowe dla MSP, FENG.
+
+  # --- Etap 2: dodatkowe zrodla (uzupelniane stopniowo) ------------------
+
+  - name: "NCBR - Konkursy"
+    url: "https://www.gov.pl/web/ncbr/konkursy"
+    fetcher: playwright
+    extractor: llm
+    wait_for_selector: "main, article, .konkurs"
+    active: true
+    notes: B+R, innowacje. Strona gov.pl - ciezka, wymaga Playwrighta.
+
+  - name: "Fundusze Europejskie dla Pomorza 2021-2027"
+    url: "https://www.fundusze.pomorskie.eu/skorzystaj-z-programu/zobacz-ogloszenia-i-wyniki-naborow-wnioskow"
+    fetcher: playwright
+    extractor: llm
+    wait_for_selector: "main, .nabor, .ogloszenie"
+    active: true
+    notes: Regionalny program FE Pomorze - top dla lokalnej klienteli.
+
+  - name: "Krajowy Plan Odbudowy (gov.pl)"
+    url: "https://www.gov.pl/web/planodbudowy/aktualne-nabory-i-konkursy"
+    fetcher: playwright
+    extractor: llm
+    wait_for_selector: "main, article"
+    active: true
+    notes: KPO - transformacja cyfrowa, OZE, innowacje.
+
+  - name: "Baza Uslug Rozwojowych (BUR PARP)"
+    url: "https://uslugirozwojowe.parp.gov.pl/wyszukiwarka/uslugi/lista"
+    fetcher: playwright
+    extractor: llm
+    wait_for_selector: "main, .uslugi, .list"
+    active: false
+    notes: |
+      Dofinansowane szkolenia dla MSP. Wlaczone na false na start - to nie sa
+      "klasyczne" nabory dotacyjne, raczej baza uslug. Mozna wlaczyc po Etapie 2.
+
+  - name: "Granty.pl - RSS"
+    url: "https://granty.pl/feed/"
+    fetcher: rss
+    extractor: css
+    active: true
+    notes: |
+      Agregator dla NGO. RSS jest stabilny, latwy w parsowaniu.
+
+# =============================================================================
+# Wskazowki dla osoby dodajacej nowe zrodlo:
+# =============================================================================
+# 1. Najpierw otworz strone w przegladarce. Zobacz, czy lista naborow widac
+#    bez JavaScriptu (Ctrl+U -> przeszukaj zrodlo). Jesli tak - fetcher: http.
+#    Jesli nie - fetcher: playwright.
+# 2. Jesli strona ma RSS (zwykle /feed lub /rss) - uzyj fetcher: rss.
+# 3. Najprosciej zaczac od extractor: llm. Pozwala unikna walki ze selektorami.
+#    Dla stabilniejszych zrodel mozna pozniej przepisac na extractor: css.
+# 4. Po dodaniu uruchom workflow recznie (workflow_dispatch w GitHub Actions),
+#    sprawdz logi i screeny. Jesli zrodlo jest w sekcji "Zrodla z bledem" -
+#    popraw selektory lub przelacz extractor na llm.
+# =============================================================================
