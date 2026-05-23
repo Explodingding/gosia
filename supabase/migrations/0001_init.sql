@@ -3,9 +3,10 @@
 -- Wykonaj w Supabase SQL Editor (lub przez `supabase db push` jesli uzywasz CLI).
 -- =============================================================================
 
--- Wlacz rozszerzenia
+-- Wlacz rozszerzenia (Supabase best practice: extensions w dedykowanej schemie)
+create schema if not exists extensions;
 create extension if not exists "uuid-ossp";
-create extension if not exists "pg_trgm";
+create extension if not exists "pg_trgm" with schema extensions;
 
 -- =============================================================================
 -- ENUM-y
@@ -170,12 +171,15 @@ create index if not exists idx_run_log_started on public.run_log(started_at desc
 -- =============================================================================
 
 create or replace function public.set_updated_at()
-returns trigger as $$
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
 begin
     new.updated_at = now();
     return new;
 end;
-$$ language plpgsql;
+$$;
 
 drop trigger if exists trg_sources_updated on public.sources;
 create trigger trg_sources_updated
@@ -189,14 +193,17 @@ create trigger trg_calls_updated
 
 -- Auto-stempel published_at gdy status zmienia sie na 'published'
 create or replace function public.set_published_at()
-returns trigger as $$
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
 begin
     if new.status = 'published' and (old.status is null or old.status != 'published') then
         new.published_at = now();
     end if;
     return new;
 end;
-$$ language plpgsql;
+$$;
 
 drop trigger if exists trg_calls_published on public.calls;
 create trigger trg_calls_published
@@ -243,17 +250,43 @@ create policy "anon_read_call_tags"
     );
 
 -- Anon moze sie zapisac na newsletter (insert), ale nie czytac listy.
+-- WITH CHECK waliduje format emaila.
 drop policy if exists "anon_insert_subscribers" on public.subscribers;
 create policy "anon_insert_subscribers"
     on public.subscribers for insert
     to anon
-    with check (true);
+    with check (
+        email is not null
+        and length(email) between 5 and 254
+        and email ~* '^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$'
+    );
+
+-- Zero-trust deny dla tabel wewnetrznych - tylko service_role z agenta.
+-- Bez tych polityk advisor zglasza "rls_enabled_no_policy".
+drop policy if exists "deny_all_anon_sources" on public.sources;
+create policy "deny_all_anon_sources"
+    on public.sources for select
+    to anon, authenticated
+    using (false);
+
+drop policy if exists "deny_all_anon_audit_log" on public.audit_log;
+create policy "deny_all_anon_audit_log"
+    on public.audit_log for select
+    to anon, authenticated
+    using (false);
+
+drop policy if exists "deny_all_anon_run_log" on public.run_log;
+create policy "deny_all_anon_run_log"
+    on public.run_log for select
+    to anon, authenticated
+    using (false);
 
 -- =============================================================================
 -- Widok: published_calls_v - wygodny widok dla frontendu
 -- =============================================================================
 
-create or replace view public.published_calls_v as
+create or replace view public.published_calls_v
+with (security_invoker = true) as
 select
     c.id,
     c.title,
